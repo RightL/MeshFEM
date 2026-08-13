@@ -1,3 +1,19 @@
+function(meshfem_apply_blockcatamari_d4_patch source_dir component)
+    set(patch_script "${MESHFEM_ROOT}/cmake/EnableBlockCatamariD4.cmake")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND}
+            "-DSOURCE_DIR=${source_dir}"
+            "-DCOMPONENT=${component}"
+            -P "${patch_script}"
+        RESULT_VARIABLE patch_result
+    )
+    if(NOT patch_result EQUAL 0)
+        message(FATAL_ERROR
+            "Failed to apply the BlockCatamari d=4 patch to ${component} "
+            "at ${source_dir}")
+    endif()
+endfunction()
+
 function(meshfem_configure_blockcatamari_d4)
     set(patch_script "${MESHFEM_ROOT}/cmake/EnableBlockCatamariD4.cmake")
 
@@ -6,13 +22,8 @@ function(meshfem_configure_blockcatamari_d4)
     # patched source without requiring a separate fork of the dependency.
     set(catamari_source_dir "${MESHFEM_EXTERNAL}/catamari")
     if(EXISTS "${catamari_source_dir}/CMakeLists.txt")
-        execute_process(
-            COMMAND ${CMAKE_COMMAND}
-                "-DSOURCE_DIR=${catamari_source_dir}"
-                "-DCOMPONENT=BlockCatamari"
-                -P "${patch_script}"
-            COMMAND_ERROR_IS_FATAL ANY
-        )
+        meshfem_apply_blockcatamari_d4_patch(
+            "${catamari_source_dir}" BlockCatamari)
     endif()
 
     FetchContent_Declare(catamari
@@ -31,13 +42,8 @@ function(meshfem_configure_blockcatamari_d4)
     # cloning and before adding the dependency as a subdirectory.
     set(meshfemsparse_source_dir "${MESHFEM_EXTERNAL}/MeshFEMSparse")
     if(EXISTS "${meshfemsparse_source_dir}/CMakeLists.txt")
-        execute_process(
-            COMMAND ${CMAKE_COMMAND}
-                "-DSOURCE_DIR=${meshfemsparse_source_dir}"
-                "-DCOMPONENT=MeshFEMSparse"
-                -P "${patch_script}"
-            COMMAND_ERROR_IS_FATAL ANY
-        )
+        meshfem_apply_blockcatamari_d4_patch(
+            "${meshfemsparse_source_dir}" MeshFEMSparse)
     endif()
 
     FetchContent_Declare(MeshFEMSparse
