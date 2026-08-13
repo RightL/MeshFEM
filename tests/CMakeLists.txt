@@ -23,6 +23,10 @@ add_executable(unit_tests
     test_analytic_hessian_projections.cc
 )
 
+if (MESHFEM_ENABLE_BLOCKCATAMARI_D4 AND MESHFEM_WITH_CATAMARI AND NOT MESHFEM_USE_LEGACY_CATAMARI)
+    target_sources(unit_tests PRIVATE test_blockcatamari_d4.cc)
+endif()
+
 target_link_libraries(unit_tests PUBLIC
 	Catch2::Catch2
 	MeshFEM
