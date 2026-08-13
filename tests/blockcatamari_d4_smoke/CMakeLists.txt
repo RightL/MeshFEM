@@ -21,10 +21,10 @@ set(MESHFEM_WITH_CHOLMOD ON CACHE BOOL "" FORCE)
 set(MESHFEM_WITH_UMFPACK OFF CACHE BOOL "" FORCE)
 set(MESHFEM_WITH_SCOTCH OFF CACHE BOOL "" FORCE)
 
-# BlockCatamari respects an existing BLAS::BLAS target. This avoids its MKL-
-# specific default search on generic CI machines. Its dense Cholesky kernels
-# also call LAPACK directly; generic BLAS packages do not bundle those symbols.
-set(BLA_VENDOR Generic)
+# The production build normally uses MKL. The focused Linux CI harness uses
+# OpenBLAS instead and explicitly selects Catamari's matching Fortran-symbol
+# convention so the smoke test is independent of MKL availability.
+set(BLA_VENDOR OpenBLAS)
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
@@ -45,6 +45,10 @@ set(MESHFEMSPARSE_GIT_TAG "main")
 include(ConfigureBlockCatamariD4)
 meshfem_configure_blockcatamari_d4()
 FetchContent_MakeAvailable(MeshFEMSparse)
+
+# BlockCatamari's current CMake detects MKL but not OpenBLAS. Tell its public
+# template headers to use the OpenBLAS trailing-underscore ABI in this harness.
+target_compile_definitions(catamari PUBLIC CATAMARI_HAVE_OPENBLAS)
 
 add_executable(blockcatamari_d4_smoke main.cc)
 target_link_libraries(blockcatamari_d4_smoke PRIVATE MeshFEMSparse LAPACK::LAPACK)
