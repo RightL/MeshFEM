@@ -7,7 +7,7 @@ function(meshfem_apply_blockcatamari_d4_patch source_dir component)
             -P "${patch_script}"
         RESULT_VARIABLE patch_result
     )
-    if(NOT patch_result EQUAL 0)
+    if(NOT "${patch_result}" STREQUAL "0")
         message(FATAL_ERROR
             "Failed to apply the BlockCatamari d=4 patch to ${component} "
             "at ${source_dir}")
