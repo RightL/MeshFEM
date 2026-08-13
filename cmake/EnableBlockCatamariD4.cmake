@@ -55,6 +55,33 @@ if(COMPONENT STREQUAL "MeshFEMSparse")
 
     // For benchmarking comparisons: disable the use of block accelerations only for numeric factorization or solves.]=]
         "expose the selected factorization block size for regression testing")
+
+    meshfem_replace_exact(
+        "${SOURCE_DIR}/src/lib/MeshFEMSparse/BlockCSCHessian.cc"
+        [=[template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3>, false>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>, false>;]=]
+        [=[template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3>, false>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<4>, false>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>, false>;]=]
+        "instantiate noncontiguous 4D block Hessians")
+
+    meshfem_replace_exact(
+        "${SOURCE_DIR}/src/lib/MeshFEMSparse/BlockCSCHessian.cc"
+        [=[template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3>, true>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>, true>;]=]
+        [=[template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3>, true>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<4>, true>;
+template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>, true>;]=]
+        "instantiate contiguous 4D block Hessians")
+
+    meshfem_replace_exact(
+        "${SOURCE_DIR}/src/lib/MeshFEMSparse/BlockCSCHessian.cc"
+        [=[    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, ContiguousBlocks>::construct(OptimizationVarStructure<3>(numBlocks));
+    if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");]=]
+        [=[    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, ContiguousBlocks>::construct(OptimizationVarStructure<3>(numBlocks));
+    if (blockSize == 4) result = BlockCSCHessian<OptimizationVarStructure<4>, ContiguousBlocks>::construct(OptimizationVarStructure<4>(numBlocks));
+    if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");]=]
+        "construct 4D block Hessians from binary streams")
 elseif(COMPONENT STREQUAL "BlockCatamari")
     meshfem_replace_exact(
         "${SOURCE_DIR}/include/catamari/sparse_ldl/supernodal/factorization.hpp"
