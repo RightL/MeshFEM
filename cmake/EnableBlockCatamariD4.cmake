@@ -82,6 +82,15 @@ template struct MESHFEM_EXPORT BlockCSCHessian<OptimizationVarStructure<3, 1, 1>
     if (blockSize == 4) result = BlockCSCHessian<OptimizationVarStructure<4>, ContiguousBlocks>::construct(OptimizationVarStructure<4>(numBlocks));
     if (!result) throw std::runtime_error("constructFromBinaryStream: uninstantiated block size");]=]
         "construct 4D block Hessians from binary streams")
+
+    meshfem_replace_exact(
+        "${SOURCE_DIR}/src/lib/MeshFEMSparse/BlockCSCHessian.hh"
+        [=[    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, ContiguousBlocks>::construct(OptimizationVarStructure<3>(numBlocks));
+    if (!result) throw std::runtime_error("compressFromScalar: uninstantiated block size");]=]
+        [=[    if (blockSize == 3) result = BlockCSCHessian<OptimizationVarStructure<3>, ContiguousBlocks>::construct(OptimizationVarStructure<3>(numBlocks));
+    if (blockSize == 4) result = BlockCSCHessian<OptimizationVarStructure<4>, ContiguousBlocks>::construct(OptimizationVarStructure<4>(numBlocks));
+    if (!result) throw std::runtime_error("compressFromScalar: uninstantiated block size");]=]
+        "compress scalar matrices into uniform 4D block Hessians")
 elseif(COMPONENT STREQUAL "BlockCatamari")
     meshfem_replace_exact(
         "${SOURCE_DIR}/include/catamari/sparse_ldl/supernodal/factorization.hpp"
