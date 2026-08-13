@@ -20,6 +20,9 @@ jobs:
       - name: Configure focused smoke project
         run: |
           cmake -S tests/blockcatamari_d4_smoke -B build/blockcatamari_d4_smoke -G Ninja
+          # Reconfigure against the now-patched editable dependency checkouts to
+          # verify that the integration is idempotent.
+          cmake -S tests/blockcatamari_d4_smoke -B build/blockcatamari_d4_smoke -G Ninja
 
       - name: Build
         run: cmake --build build/blockcatamari_d4_smoke --parallel 2
