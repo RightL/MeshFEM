@@ -26,6 +26,7 @@ TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
           "[blockcatamari_d4]") {
     constexpr size_t blockSize = 4;
     constexpr size_t numBlocks = 4;
+    constexpr double shift = 0.25;
 
     const std::array<std::array<size_t, 2>, numBlocks - 1> stencils {{
         {{0, 1}},
@@ -52,6 +53,7 @@ TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
         blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
     expected.head(blockSize).setZero();
     const Eigen::VectorXd rhs = H->apply(expected);
+    const Eigen::VectorXd shiftedRhs = rhs + shift * expected;
 
     // Cover both factorization implementations and both solve dispatch paths.
     for (bool useLeftLooking : {false, true}) {
@@ -71,8 +73,14 @@ TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
             REQUIRE(factorizer.getFactorizationBlockSize() == blockSize);
 
             factorizer.factorizeNumeric(*H);
-            const Eigen::VectorXd actual = factorizer.solve(rhs);
-            REQUIRE((actual - expected).norm() / expected.norm() < 1e-11);
+            REQUIRE((factorizer.solve(rhs) - expected).norm()
+                    / expected.norm() < 1e-11);
+
+            // Exercise MORSE's Levenberg--Marquardt A + tau I path while
+            // retaining the same symbolic factorization and d=4 block layout.
+            factorizer.factorizeNumericWithShift(*H, shift);
+            REQUIRE((factorizer.solve(shiftedRhs) - expected).norm()
+                    / expected.norm() < 1e-11);
         }
     }
 }
