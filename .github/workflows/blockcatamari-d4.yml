@@ -3,7 +3,7 @@ name: BlockCatamari d=4
 on:
   push:
     branches:
-      - agent/blockcatamari-d4
+      - master
   pull_request:
 
 jobs:
