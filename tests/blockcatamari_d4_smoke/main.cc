@@ -18,12 +18,28 @@ struct TBBThreadLimit {
         unset_max_num_tbb_threads();
     }
 };
+
+bool checkSolution(const Eigen::VectorXd &actual,
+                   const Eigen::VectorXd &expected,
+                   bool useLeftLooking,
+                   int numThreads,
+                   const char *solveKind) {
+    const double relativeError =
+        (actual - expected).norm() / expected.norm();
+    if (relativeError < 1e-11) return true;
+
+    std::cerr << solveKind << " solve failed for left-looking="
+              << useLeftLooking << ", threads=" << numThreads
+              << ", relative error=" << relativeError << '\n';
+    return false;
+}
 }
 
 int main() {
     try {
         constexpr size_t blockSize = 4;
         constexpr size_t numBlocks = 4;
+        constexpr double shift = 0.25;
 
         const std::array<std::array<size_t, 2>, numBlocks - 1> stencils {{
             {{0, 1}},
@@ -49,6 +65,7 @@ int main() {
             blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
         expected.head(blockSize).setZero();
         const Eigen::VectorXd rhs = H->apply(expected);
+        const Eigen::VectorXd shiftedRhs = rhs + shift * expected;
         const std::vector<size_t> fixedVars {0, 1, 2, 3};
 
         for (bool useLeftLooking : {false, true}) {
@@ -67,13 +84,16 @@ int main() {
                 }
 
                 factorizer.factorizeNumeric(*H);
-                const Eigen::VectorXd actual = factorizer.solve(rhs);
-                const double relativeError =
-                    (actual - expected).norm() / expected.norm();
-                if (relativeError >= 1e-11) {
-                    std::cerr << "Solve failed for left-looking=" << useLeftLooking
-                              << ", threads=" << numThreads
-                              << ", relative error=" << relativeError << '\n';
+                if (!checkSolution(factorizer.solve(rhs), expected,
+                                   useLeftLooking, numThreads, "Unshifted")) {
+                    return 1;
+                }
+
+                // This is the Levenberg--Marquardt path used by MORSE:
+                // refactor the same pattern after adding tau I.
+                factorizer.factorizeNumericWithShift(*H, shift);
+                if (!checkSolution(factorizer.solve(shiftedRhs), expected,
+                                   useLeftLooking, numThreads, "Shifted")) {
                     return 1;
                 }
             }
