@@ -24,9 +24,15 @@ struct MatrixCase {
     const BlockCSCHessianBase *matrix;
 };
 
+struct PinCase {
+    const char *name;
+    const std::vector<size_t> *fixedVars;
+};
+
 bool checkSolution(const Eigen::VectorXd &actual,
                    const Eigen::VectorXd &expected,
                    const char *matrixKind,
+                   const char *pinKind,
                    bool useLeftLooking,
                    int numThreads,
                    const char *solveKind) {
@@ -35,6 +41,7 @@ bool checkSolution(const Eigen::VectorXd &actual,
     if (relativeError < 1e-11) return true;
 
     std::cerr << solveKind << " solve failed for matrix=" << matrixKind
+              << ", pins=" << pinKind
               << ", left-looking=" << useLeftLooking
               << ", threads=" << numThreads
               << ", relative error=" << relativeError << '\n';
@@ -99,46 +106,59 @@ int main() {
             {"scalar-compressed", compressedH.get()},
         }};
 
+        const std::vector<size_t> noFixedVars;
+        const std::vector<size_t> fixedFirstBlock {0, 1, 2, 3};
+        const std::array<PinCase, 2> pinCases {{
+            {"none", &noFixedVars},
+            {"whole-d4-block", &fixedFirstBlock},
+        }};
+
         Eigen::VectorXd expected = Eigen::VectorXd::LinSpaced(
             blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
         expected.head(blockSize).setZero();
         const Eigen::VectorXd rhs = H->apply(expected);
         const Eigen::VectorXd shiftedRhs = rhs + shift * expected;
-        const std::vector<size_t> fixedVars {0, 1, 2, 3};
 
         for (const MatrixCase &matrixCase : matrices) {
-            for (bool useLeftLooking : {false, true}) {
-                for (int numThreads : {1, 2}) {
-                    TBBThreadLimit threadLimit(numThreads);
+            for (const PinCase &pinCase : pinCases) {
+                for (bool useLeftLooking : {false, true}) {
+                    for (int numThreads : {1, 2}) {
+                        TBBThreadLimit threadLimit(numThreads);
 
-                    CatamariFactorizer factorizer;
-                    factorizer.orderingMethod =
-                        CatamariFactorizer::OrderingMethod::AMD;
-                    factorizer.setUseLeftLooking(useLeftLooking);
-                    factorizer.factorizeSymbolic(*matrixCase.matrix, fixedVars);
+                        CatamariFactorizer factorizer;
+                        factorizer.orderingMethod =
+                            CatamariFactorizer::OrderingMethod::AMD;
+                        factorizer.setUseLeftLooking(useLeftLooking);
+                        factorizer.factorizeSymbolic(
+                            *matrixCase.matrix, *pinCase.fixedVars);
 
-                    if (factorizer.getFactorizationBlockSize() != blockSize) {
-                        std::cerr << "Expected d=4 block factorization for "
-                                  << matrixCase.name << ", got d="
-                                  << factorizer.getFactorizationBlockSize() << '\n';
-                        return 1;
-                    }
+                        if (factorizer.getFactorizationBlockSize() != blockSize) {
+                            std::cerr << "Expected d=4 block factorization for "
+                                      << matrixCase.name << " with pins="
+                                      << pinCase.name << ", got d="
+                                      << factorizer.getFactorizationBlockSize()
+                                      << '\n';
+                            return 1;
+                        }
 
-                    factorizer.factorizeNumeric(*matrixCase.matrix);
-                    if (!checkSolution(factorizer.solve(rhs), expected,
-                                       matrixCase.name, useLeftLooking,
-                                       numThreads, "Unshifted")) {
-                        return 1;
-                    }
+                        factorizer.factorizeNumeric(*matrixCase.matrix);
+                        if (!checkSolution(factorizer.solve(rhs), expected,
+                                           matrixCase.name, pinCase.name,
+                                           useLeftLooking, numThreads,
+                                           "Unshifted")) {
+                            return 1;
+                        }
 
-                    // This is the Levenberg--Marquardt path used by MORSE:
-                    // refactor the same pattern after adding tau I.
-                    factorizer.factorizeNumericWithShift(
-                        *matrixCase.matrix, shift);
-                    if (!checkSolution(factorizer.solve(shiftedRhs), expected,
-                                       matrixCase.name, useLeftLooking,
-                                       numThreads, "Shifted")) {
-                        return 1;
+                        // This is the Levenberg--Marquardt path used by MORSE:
+                        // refactor the same pattern after adding tau I.
+                        factorizer.factorizeNumericWithShift(
+                            *matrixCase.matrix, shift);
+                        if (!checkSolution(factorizer.solve(shiftedRhs), expected,
+                                           matrixCase.name, pinCase.name,
+                                           useLeftLooking, numThreads,
+                                           "Shifted")) {
+                            return 1;
+                        }
                     }
                 }
             }
