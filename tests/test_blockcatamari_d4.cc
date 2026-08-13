@@ -20,6 +20,11 @@ struct TBBThreadLimit {
         unset_max_num_tbb_threads();
     }
 };
+
+struct MatrixCase {
+    const char *name;
+    const BlockCSCHessianBase *matrix;
+};
 }
 
 TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
@@ -70,38 +75,49 @@ TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
         }
     }
 
+    const auto scalarH = H->toScalar();
+    auto compressedH = BlockCSCHessianFromScalar(scalarH, blockSize);
+    const std::array<MatrixCase, 2> matrices {{
+        {"assembled", H.get()},
+        {"scalar-compressed", compressedH.get()},
+    }};
+
     Eigen::VectorXd expected = Eigen::VectorXd::LinSpaced(
         blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
     expected.head(blockSize).setZero();
     const Eigen::VectorXd rhs = H->apply(expected);
     const Eigen::VectorXd shiftedRhs = rhs + shift * expected;
 
-    // Cover both factorization implementations and both solve dispatch paths.
-    for (bool useLeftLooking : {false, true}) {
-        for (int numThreads : {1, 2}) {
-            TBBThreadLimit threadLimit(numThreads);
+    for (const MatrixCase &matrixCase : matrices) {
+        // Cover both factorization implementations and both solve dispatch paths.
+        for (bool useLeftLooking : {false, true}) {
+            for (int numThreads : {1, 2}) {
+                TBBThreadLimit threadLimit(numThreads);
 
-            CatamariFactorizer factorizer;
-            factorizer.orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
-            factorizer.setUseLeftLooking(useLeftLooking);
+                CatamariFactorizer factorizer;
+                factorizer.orderingMethod =
+                    CatamariFactorizer::OrderingMethod::AMD;
+                factorizer.setUseLeftLooking(useLeftLooking);
 
-            // MORSE fixes all four coordinates of a boundary field value together.
-            const std::vector<size_t> fixedVars {0, 1, 2, 3};
-            factorizer.factorizeSymbolic(*H, fixedVars);
+                // MORSE fixes all four coordinates of a boundary field value together.
+                const std::vector<size_t> fixedVars {0, 1, 2, 3};
+                factorizer.factorizeSymbolic(*matrixCase.matrix, fixedVars);
 
-            INFO("left-looking = " << useLeftLooking);
-            INFO("threads = " << numThreads);
-            REQUIRE(factorizer.getFactorizationBlockSize() == blockSize);
+                INFO("matrix = " << matrixCase.name);
+                INFO("left-looking = " << useLeftLooking);
+                INFO("threads = " << numThreads);
+                REQUIRE(factorizer.getFactorizationBlockSize() == blockSize);
 
-            factorizer.factorizeNumeric(*H);
-            REQUIRE((factorizer.solve(rhs) - expected).norm()
-                    / expected.norm() < 1e-11);
+                factorizer.factorizeNumeric(*matrixCase.matrix);
+                REQUIRE((factorizer.solve(rhs) - expected).norm()
+                        / expected.norm() < 1e-11);
 
-            // Exercise MORSE's Levenberg--Marquardt A + tau I path while
-            // retaining the same symbolic factorization and d=4 block layout.
-            factorizer.factorizeNumericWithShift(*H, shift);
-            REQUIRE((factorizer.solve(shiftedRhs) - expected).norm()
-                    / expected.norm() < 1e-11);
+                // Exercise MORSE's Levenberg--Marquardt A + tau I path while
+                // retaining the same symbolic factorization and d=4 block layout.
+                factorizer.factorizeNumericWithShift(*matrixCase.matrix, shift);
+                REQUIRE((factorizer.solve(shiftedRhs) - expected).norm()
+                        / expected.norm() < 1e-11);
+            }
         }
     }
 }
