@@ -46,6 +46,7 @@ option(MESHFEM_PREFER_SYSTEM_CERES   "Do not build a local version of Ceres if o
 option(MESHFEM_WITH_IPC_TOOLKIT      "Compile MeshFEM with Ipc_toolkit" ON)
 option(MESHFEM_WITH_TINYAD           "Whether to use the TinyAD `Scalar` type as the autodiff backend intead of (nested) Eigen" ON)
 option(MESHFEM_BIND_LONG_DOUBLE      "Also bind the long-double FEMMesh instantiations" OFF)
+option(MESHFEM_ENABLE_BLOCKCATAMARI_D4 "Enable uniform d=4 BlockCatamari factorization and solves" ON)
 
 option(MESHFEM_FORCE_TINYAD_DOWNLOAD "Whether to force the download of TinyAD (on behalf of the parent project) even when not using TinyAD for MeshFEM's autodiff" OFF)
 mark_as_advanced(MESHFEM_FORCE_TINYAD_DOWNLOAD)
@@ -162,6 +163,11 @@ endif()
 
 if(NOT DEFINED MESHFEMSPARSE_BUILD_TESTS)
     set(MESHFEMSPARSE_BUILD_TESTS ${MESHFEM_BUILD_TESTS} CACHE BOOL "Build MeshFEMSparse tests")
+endif()
+
+if(MESHFEM_ENABLE_BLOCKCATAMARI_D4 AND NOT TARGET MeshFEMSparse)
+    include(ConfigureBlockCatamariD4)
+    meshfem_configure_blockcatamari_d4()
 endif()
 
 if(NOT TARGET MeshFEMSparse)

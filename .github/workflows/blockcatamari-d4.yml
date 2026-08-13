@@ -1,0 +1,31 @@
+name: BlockCatamari d=4
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install sparse-solver dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libopenblas-dev liblapack-dev libsuitesparse-dev
+
+      - name: Configure focused smoke project
+        run: |
+          cmake -S tests/blockcatamari_d4_smoke -B build/blockcatamari_d4_smoke -G Ninja
+          # Reconfigure against the now-patched editable dependency checkouts to
+          # verify that the integration is idempotent.
+          cmake -S tests/blockcatamari_d4_smoke -B build/blockcatamari_d4_smoke -G Ninja
+
+      - name: Build
+        run: cmake --build build/blockcatamari_d4_smoke --parallel 2
+
+      - name: Test
+        run: ctest --test-dir build/blockcatamari_d4_smoke --output-on-failure
