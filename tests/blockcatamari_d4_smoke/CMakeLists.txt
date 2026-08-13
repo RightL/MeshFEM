@@ -22,9 +22,11 @@ set(MESHFEM_WITH_UMFPACK OFF CACHE BOOL "" FORCE)
 set(MESHFEM_WITH_SCOTCH OFF CACHE BOOL "" FORCE)
 
 # BlockCatamari respects an existing BLAS::BLAS target. This avoids its MKL-
-# specific default search on generic CI machines.
+# specific default search on generic CI machines. Its dense Cholesky kernels
+# also call LAPACK directly; generic BLAS packages do not bundle those symbols.
 set(BLA_VENDOR Generic)
 find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
 
 set(MESHFEMCORE_GIT_REPOSITORY "https://github.com/MeshFEM/MeshFEMCore.git")
 set(MESHFEMCORE_GIT_TAG "main")
@@ -45,6 +47,6 @@ meshfem_configure_blockcatamari_d4()
 FetchContent_MakeAvailable(MeshFEMSparse)
 
 add_executable(blockcatamari_d4_smoke main.cc)
-target_link_libraries(blockcatamari_d4_smoke PRIVATE MeshFEMSparse)
+target_link_libraries(blockcatamari_d4_smoke PRIVATE MeshFEMSparse LAPACK::LAPACK)
 
 add_test(NAME blockcatamari_d4_smoke COMMAND blockcatamari_d4_smoke)
