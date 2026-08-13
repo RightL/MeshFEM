@@ -19,8 +19,14 @@ struct TBBThreadLimit {
     }
 };
 
+struct MatrixCase {
+    const char *name;
+    const BlockCSCHessianBase *matrix;
+};
+
 bool checkSolution(const Eigen::VectorXd &actual,
                    const Eigen::VectorXd &expected,
+                   const char *matrixKind,
                    bool useLeftLooking,
                    int numThreads,
                    const char *solveKind) {
@@ -28,8 +34,9 @@ bool checkSolution(const Eigen::VectorXd &actual,
         (actual - expected).norm() / expected.norm();
     if (relativeError < 1e-11) return true;
 
-    std::cerr << solveKind << " solve failed for left-looking="
-              << useLeftLooking << ", threads=" << numThreads
+    std::cerr << solveKind << " solve failed for matrix=" << matrixKind
+              << ", left-looking=" << useLeftLooking
+              << ", threads=" << numThreads
               << ", relative error=" << relativeError << '\n';
     return false;
 }
@@ -83,6 +90,15 @@ int main() {
             }
         }
 
+        // Exercise both a natively assembled d=4 matrix and the migration path
+        // from an existing scalar SuiteSparseMatrix representation.
+        const auto scalarH = H->toScalar();
+        auto compressedH = BlockCSCHessianFromScalar(scalarH, blockSize);
+        const std::array<MatrixCase, 2> matrices {{
+            {"assembled", H.get()},
+            {"scalar-compressed", compressedH.get()},
+        }};
+
         Eigen::VectorXd expected = Eigen::VectorXd::LinSpaced(
             blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
         expected.head(blockSize).setZero();
@@ -90,33 +106,40 @@ int main() {
         const Eigen::VectorXd shiftedRhs = rhs + shift * expected;
         const std::vector<size_t> fixedVars {0, 1, 2, 3};
 
-        for (bool useLeftLooking : {false, true}) {
-            for (int numThreads : {1, 2}) {
-                TBBThreadLimit threadLimit(numThreads);
+        for (const MatrixCase &matrixCase : matrices) {
+            for (bool useLeftLooking : {false, true}) {
+                for (int numThreads : {1, 2}) {
+                    TBBThreadLimit threadLimit(numThreads);
 
-                CatamariFactorizer factorizer;
-                factorizer.orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
-                factorizer.setUseLeftLooking(useLeftLooking);
-                factorizer.factorizeSymbolic(*H, fixedVars);
+                    CatamariFactorizer factorizer;
+                    factorizer.orderingMethod =
+                        CatamariFactorizer::OrderingMethod::AMD;
+                    factorizer.setUseLeftLooking(useLeftLooking);
+                    factorizer.factorizeSymbolic(*matrixCase.matrix, fixedVars);
 
-                if (factorizer.getFactorizationBlockSize() != blockSize) {
-                    std::cerr << "Expected d=4 block factorization, got d="
-                              << factorizer.getFactorizationBlockSize() << '\n';
-                    return 1;
-                }
+                    if (factorizer.getFactorizationBlockSize() != blockSize) {
+                        std::cerr << "Expected d=4 block factorization for "
+                                  << matrixCase.name << ", got d="
+                                  << factorizer.getFactorizationBlockSize() << '\n';
+                        return 1;
+                    }
 
-                factorizer.factorizeNumeric(*H);
-                if (!checkSolution(factorizer.solve(rhs), expected,
-                                   useLeftLooking, numThreads, "Unshifted")) {
-                    return 1;
-                }
+                    factorizer.factorizeNumeric(*matrixCase.matrix);
+                    if (!checkSolution(factorizer.solve(rhs), expected,
+                                       matrixCase.name, useLeftLooking,
+                                       numThreads, "Unshifted")) {
+                        return 1;
+                    }
 
-                // This is the Levenberg--Marquardt path used by MORSE:
-                // refactor the same pattern after adding tau I.
-                factorizer.factorizeNumericWithShift(*H, shift);
-                if (!checkSolution(factorizer.solve(shiftedRhs), expected,
-                                   useLeftLooking, numThreads, "Shifted")) {
-                    return 1;
+                    // This is the Levenberg--Marquardt path used by MORSE:
+                    // refactor the same pattern after adding tau I.
+                    factorizer.factorizeNumericWithShift(
+                        *matrixCase.matrix, shift);
+                    if (!checkSolution(factorizer.solve(shiftedRhs), expected,
+                                       matrixCase.name, useLeftLooking,
+                                       numThreads, "Shifted")) {
+                        return 1;
+                    }
                 }
             }
         }
