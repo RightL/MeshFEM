@@ -11,6 +11,17 @@
 
 using namespace MeshFEM;
 
+namespace {
+struct TBBThreadLimit {
+    explicit TBBThreadLimit(int numThreads) {
+        set_max_num_tbb_threads(numThreads);
+    }
+    ~TBBThreadLimit() {
+        unset_max_num_tbb_threads();
+    }
+};
+}
+
 TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
           "[blockcatamari_d4]") {
     constexpr size_t blockSize = 4;
@@ -37,22 +48,31 @@ TEST_CASE("BlockCatamari factors and solves uniform 4D blocks",
         }
     }
 
-    CatamariFactorizer factorizer;
-    factorizer.orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
-
-    // MORSE fixes all four coordinates of a boundary field value together.
-    const std::vector<size_t> fixedVars {0, 1, 2, 3};
-    factorizer.factorizeSymbolic(*H, fixedVars);
-    REQUIRE(factorizer.getFactorizationBlockSize() == blockSize);
-
-    factorizer.factorizeNumeric(*H);
-
     Eigen::VectorXd expected = Eigen::VectorXd::LinSpaced(
         blockSize * numBlocks, 1.0, double(blockSize * numBlocks));
     expected.head(blockSize).setZero();
-
     const Eigen::VectorXd rhs = H->apply(expected);
-    const Eigen::VectorXd actual = factorizer.solve(rhs);
 
-    REQUIRE((actual - expected).norm() / expected.norm() < 1e-11);
+    // Cover both factorization implementations and both solve dispatch paths.
+    for (bool useLeftLooking : {false, true}) {
+        for (int numThreads : {1, 2}) {
+            TBBThreadLimit threadLimit(numThreads);
+
+            CatamariFactorizer factorizer;
+            factorizer.orderingMethod = CatamariFactorizer::OrderingMethod::AMD;
+            factorizer.setUseLeftLooking(useLeftLooking);
+
+            // MORSE fixes all four coordinates of a boundary field value together.
+            const std::vector<size_t> fixedVars {0, 1, 2, 3};
+            factorizer.factorizeSymbolic(*H, fixedVars);
+
+            INFO("left-looking = " << useLeftLooking);
+            INFO("threads = " << numThreads);
+            REQUIRE(factorizer.getFactorizationBlockSize() == blockSize);
+
+            factorizer.factorizeNumeric(*H);
+            const Eigen::VectorXd actual = factorizer.solve(rhs);
+            REQUIRE((actual - expected).norm() / expected.norm() < 1e-11);
+        }
+    }
 }
